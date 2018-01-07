@@ -402,7 +402,7 @@ def learn(env,
                     do_it = False
 
                 if do_it and _ATTACK_MINIMAP in obs[0].observation["available_actions"]:
-                    target = [float(x), float(y)]
+                    target = [float(x) + random.uniform(-1, 1), float(y) + random.uniform(-1, 1)]
                     obs = env.step(actions=[sc2_actions.FunctionCall(_ATTACK_MINIMAP, [_NOT_QUEUED, target])])
                     obs = env.step(actions=[sc2_actions.FunctionCall(_MOVE_CAMERA, [target])])
                     performed_action = True
