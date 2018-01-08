@@ -26,9 +26,7 @@ _ATTACK_SCREEN = sc2_actions.FUNCTIONS.Attack_screen.id
 
 _NO_OP = sc2_actions.FUNCTIONS.no_op.id
 _BUILD_SUPPLY_DEPOT = sc2_actions.FUNCTIONS.Build_SupplyDepot_screen.id
-print("__BUILD_SUPPLY_DEPOT: %d", _BUILD_SUPPLY_DEPOT)
 _BUILD_BARRACKS = sc2_actions.FUNCTIONS.Build_Barracks_screen.id
-print("_BUILD_BARRACKS: %d", _BUILD_BARRACKS)
 _TRAIN_MARINE = sc2_actions.FUNCTIONS.Train_Marine_quick.id
 
 _SELECTED = features.SCREEN_FEATURES.selected.index

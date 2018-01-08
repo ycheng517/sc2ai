@@ -9,7 +9,6 @@ import datetime
 from baselines.logger import Logger, TensorBoardOutputFormat, HumanOutputFormat
 
 import random
-import sc2ai.deepq_learner_marine_attack
 import sc2ai.wrapper.gym_env
 
 
@@ -67,7 +66,8 @@ def main():
             map_name="Simple64",
             agent_race="T",
             step_mul=step_mul,
-            visualize=True,
+            visualize=False,
+            score_index=-1, # killed_value_structures
             screen_size_px=(84, 84),
             minimap_size_px=(64, 64)) as env:
 
@@ -76,18 +76,29 @@ def main():
         ACTION_BUILD_SUPPLY_DEPOT = 'buildsupplydepot'
         ACTION_BUILD_BARRACKS = 'buildbarracks'
         ACTION_BUILD_MARINE = 'buildmarine'
-        ACTION_ATTACK = 'attack'
+        ACTION_ATTACK_UP = 'attackup'
+        ACTION_ATTACK_DOWN = 'attackdown'
+        ACTION_ATTACK_LEFT = 'attackleft'
+        ACTION_ATTACK_RIGHT = 'attackright'
+        ACTION_MOVE_UP = 'moveup'
+        ACTION_MOVE_DOWN = 'movedown'
+        ACTION_MOVE_LEFT = 'moveleft'
+        ACTION_MOVE_RIGHT = 'moveright'
 
         action_lib = [
             ACTION_DO_NOTHING,
             ACTION_BUILD_SUPPLY_DEPOT,
             ACTION_BUILD_BARRACKS,
             ACTION_BUILD_MARINE,
+            ACTION_ATTACK_UP,
+            ACTION_ATTACK_DOWN,
+            ACTION_ATTACK_LEFT,
+            ACTION_ATTACK_RIGHT,
+            ACTION_MOVE_UP,
+            ACTION_MOVE_DOWN,
+            ACTION_MOVE_LEFT,
+            ACTION_MOVE_RIGHT,
         ]
-
-        for mm_x in range(1, 16):  # range should match minimap resolution
-            for mm_y in range(1, 16):
-                action_lib.append(ACTION_ATTACK + "_" + str(mm_x * 4) + "_" + str(mm_y * 4))
 
         gym_env = sc2ai.wrapper.gym_env.GymEnv(env=env,
                                                action_lookup=action_lib)
@@ -101,8 +112,8 @@ def main():
             max_timesteps=FLAGS.timesteps,
             buffer_size=10000,
             exploration_fraction=FLAGS.exploration_fraction,
-            train_freq=4,
-            print_freq=10,
+            train_freq=1,
+            print_freq=5,
             prioritized_replay=True,
             param_noise=True)
         act.save("gym_env_marine.pkl")

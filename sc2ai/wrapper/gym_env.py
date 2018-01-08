@@ -12,6 +12,15 @@ ACTION_BUILD_SUPPLY_DEPOT = 'buildsupplydepot'
 ACTION_BUILD_BARRACKS = 'buildbarracks'
 ACTION_BUILD_MARINE = 'buildmarine'
 ACTION_ATTACK = 'attack'
+ACTION_ATTACK_UP = 'attackup'
+ACTION_ATTACK_DOWN = 'attackdown'
+ACTION_ATTACK_LEFT = 'attackleft'
+ACTION_ATTACK_RIGHT = 'attackright'
+ACTION_MOVE = 'move'
+ACTION_MOVE_UP = 'moveup'
+ACTION_MOVE_DOWN = 'movedown'
+ACTION_MOVE_LEFT = 'moveleft'
+ACTION_MOVE_RIGHT = 'moveright'
 
 _NOT_QUEUED = [0]
 _QUEUED = [1]
@@ -24,6 +33,7 @@ _ARMY_SUPPLY = 5
 
 _TERRAN_COMMANDCENTER = 18
 _TERRAN_SCV = 45
+_TERRAN_MARINE = 48
 _TERRAN_SUPPLY_DEPOT = 19
 _TERRAN_BARRACKS = 21
 _NEUTRAL_MINERAL_FIELD = 341
@@ -35,18 +45,27 @@ _NO_OP = actions.FUNCTIONS.no_op.id
 _BUILD_SUPPLY_DEPOT = actions.FUNCTIONS.Build_SupplyDepot_screen.id
 _BUILD_BARRACKS = actions.FUNCTIONS.Build_Barracks_screen.id
 _TRAIN_MARINE = actions.FUNCTIONS.Train_Marine_quick.id
+_LOWER_SUPPLY_DEPOT = actions.FUNCTIONS.Morph_SupplyDepot_Lower_quick.id
 
 _SELECTED = features.SCREEN_FEATURES.selected.index
+_SELECTED_MINIMAP = features.MINIMAP_FEATURES.selected.index
 _SELECT_POINT = actions.FUNCTIONS.select_point.id
 _SELECT_ARMY = actions.FUNCTIONS.select_army.id
 _SELECT_UNIT = actions.FUNCTIONS.select_unit.id
 _SELECT_CONTROL_GROUP = actions.FUNCTIONS.select_control_group.id
 _ATTACK_MINIMAP = actions.FUNCTIONS.Attack_minimap.id
+_ATTACK_SCREEN = actions.FUNCTIONS.Attack_screen.id
 _HARVEST_GATHER = actions.FUNCTIONS.Harvest_Gather_screen.id
 
 _PLAYER_RELATIVE = features.SCREEN_FEATURES.player_relative.index
 _PLAYER_RELATIVE_MINIMAP = features.MINIMAP_FEATURES.player_relative.index
 _UNIT_TYPE = features.SCREEN_FEATURES.unit_type.index
+
+# player features
+_ARMY_SUPPLY = 5
+
+# score cumulative
+_KILLED_VALUE_STRUCTURES = 6
 
 def action_to_coord(action_name):
     _, x, y = action_name.split('_')
@@ -109,6 +128,11 @@ class GymEnv(base_env_wrapper.BaseEnvWrapper):
         obs = super(GymEnv, self).step(actions=[actions.FunctionCall(_NO_OP, [])])
         if obs[0].last():
             return self._gym_step_returns(obs)
+
+        # track reward before action
+        visibility = len(obs[0].observation['minimap'][features.MINIMAP_FEATURES.visibility_map.index].nonzero()[0])
+        army_supply = obs[0].observation['player'][_ARMY_SUPPLY]
+        killed_buildings = obs[0].observation['score_cumulative'][_KILLED_VALUE_STRUCTURES]
 
         pending_action = self._action_lookup[action]
 
@@ -181,21 +205,74 @@ class GymEnv(base_env_wrapper.BaseEnvWrapper):
                 if len(obs[0].observation['multi_select']) > 0 and obs[0].observation['multi_select'][0][0] == _TERRAN_SCV:
                     do_it = False
 
-                if do_it and _ATTACK_MINIMAP in obs[0].observation["available_actions"]:
-                    x, y = action_to_coord(pending_action)
-                    target = [float(x) + random.uniform(-1, 1), float(y) + random.uniform(-1, 1)]
-                    obs = super(GymEnv, self).step(actions=[actions.FunctionCall(_ATTACK_MINIMAP, [_NOT_QUEUED, target]),
-                                                                    actions.FunctionCall(_MOVE_CAMERA, [target])])
+                if do_it and _ATTACK_SCREEN in obs[0].observation["available_actions"]:
+                    selected_y, selected_x = obs[0].observation['minimap'][_SELECTED_MINIMAP].nonzero()
+                    target = [selected_x.mean(), selected_y.mean()]
+                    obs = super(GymEnv, self).step(actions=[actions.FunctionCall(_MOVE_CAMERA, [target])])
+                    if obs[0].last():
+                        return self._gym_step_returns(obs)
+                    if _ATTACK_SCREEN in obs[0].observation["available_actions"]:
+                        units_y, units_x = obs[0].observation['screen'][_SELECTED].nonzero()
+                        if units_y.any():
+                            target = [units_x.mean(), units_y.mean()]
+                            if pending_action == ACTION_ATTACK_UP:
+                                target[1] += 10
+                            elif pending_action == ACTION_ATTACK_DOWN:
+                                target[1] -= 10
+                            elif pending_action == ACTION_ATTACK_LEFT:
+                                target[0] -= 10
+                            elif pending_action == ACTION_ATTACK_RIGHT:
+                                target[0] += 10
+                            target[0] = max(min(target[0], 80), 0)
+                            target[1] = max(min(target[1], 80), 0)
+                            if obs[0].observation['screen'][_PLAYER_RELATIVE][int(target[1])][int(target[0])] != _PLAYER_SELF:
+                                obs = super(GymEnv, self).step(actions=[actions.FunctionCall(_ATTACK_SCREEN, [_NOT_QUEUED, target])])
 
+        elif ACTION_MOVE in pending_action:
+            if _SELECT_ARMY in obs[0].observation['available_actions']:
+                obs = super(GymEnv, self).step([actions.FunctionCall(_SELECT_ARMY, [_NOT_QUEUED])])
+                if obs[0].last():
+                    return self._gym_step_returns(obs)
 
+                do_it = True
+                if len(obs[0].observation['single_select']) > 0 and obs[0].observation['single_select'][0][0] == _TERRAN_SCV:
+                    do_it = False
+                if len(obs[0].observation['multi_select']) > 0 and obs[0].observation['multi_select'][0][0] == _TERRAN_SCV:
+                    do_it = False
 
-        return self._gym_step_returns(obs)
+                if do_it and _MOVE_SCREEN in obs[0].observation["available_actions"]:
+                    selected_y, selected_x = obs[0].observation['minimap'][_SELECTED_MINIMAP].nonzero()
+                    target = [selected_x.mean(), selected_y.mean()]
+                    obs = super(GymEnv, self).step(actions=[actions.FunctionCall(_MOVE_CAMERA, [target])])
+                    if obs[0].last():
+                        return self._gym_step_returns(obs)
+                    if _MOVE_SCREEN in obs[0].observation["available_actions"]:
+                        units_y, units_x = obs[0].observation['screen'][_SELECTED].nonzero()
+                        if units_y.any():
+                            target = [units_x.mean(), units_y.mean()]
+                            if pending_action == ACTION_ATTACK_UP:
+                                target[1] += 10
+                            elif pending_action == ACTION_ATTACK_DOWN:
+                                target[1] -= 10
+                            elif pending_action == ACTION_ATTACK_LEFT:
+                                target[0] -= 10
+                            elif pending_action == ACTION_ATTACK_RIGHT:
+                                target[0] += 10
+                            target[0] = max(min(target[0], 80), 0)
+                            target[1] = max(min(target[1], 80), 0)
+                            obs = super(GymEnv, self).step(actions=[actions.FunctionCall(_MOVE_SCREEN, [_NOT_QUEUED, target])])
 
-    def _gym_step_returns(self, obs):
+        extra_reward = self._calculate_extra_reward(obs, visibility, army_supply, killed_buildings)
+        return self._gym_step_returns(obs, extra_reward)
+
+    def _gym_step_returns(self, obs, extra_reward=0):
         player_relative = obs[0].observation["screen"][_PLAYER_RELATIVE]
         player_relative_minimap = obs[0].observation['minimap'][_PLAYER_RELATIVE_MINIMAP]
         obs_flattened = np.concatenate((np.array(player_relative).flatten(), np.array(player_relative_minimap).flatten()))
-        return obs_flattened, obs[0].reward, obs[0].last(), {}
+        rew = obs[0].reward + extra_reward
+        if obs[0].last():
+            print("reward: {}=======================".format(rew))
+        return obs_flattened, rew, obs[0].last(), {}
 
     def _gym_reset_returns(self, obs):
         player_relative = obs[0].observation["screen"][_PLAYER_RELATIVE]
@@ -206,3 +283,19 @@ class GymEnv(base_env_wrapper.BaseEnvWrapper):
     def reset(self):
         obs = super(GymEnv, self).reset()
         return self._gym_reset_returns(obs)
+
+    def _calculate_extra_reward(self, obs, pre_visibility, pre_army_supply, pre_killed_buildings):
+        visibility = len(obs[0].observation['minimap'][features.MINIMAP_FEATURES.visibility_map.index].nonzero()[0])
+        army_supply = obs[0].observation['player'][_ARMY_SUPPLY]
+        killed_buildings = obs[0].observation['score_cumulative'][_KILLED_VALUE_STRUCTURES]
+        # print("visibility: pre: {}, post:{}", pre_visibility, visibility)
+        # print("army supply: pre: {}, post:{}", pre_army_supply, army_supply)
+        # print("killed buildins: pre: {}, post:{}", pre_killed_buildings, killed_buildings)
+        rew = 0
+        if visibility > pre_visibility:
+            rew += 0.001
+        if army_supply > pre_army_supply:
+            rew += 0.002
+        if killed_buildings > pre_killed_buildings:
+            rew += 0.005
+        return rew
