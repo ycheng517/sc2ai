@@ -254,7 +254,9 @@ def learn(env,
     # by cloudpickle when serializing make_obs_ph
     # observation_space_shape = env.observation_space.shape
     def make_obs_ph(name):
-        return U.BatchInput((84, 84), name=name) # TODO: make sure this has the right shape
+        out = U.BatchInput((84, 84), name=name)
+        print(out)
+        return out
 
     act, train, update_target, debug = deepq.build_train(
         make_obs_ph=make_obs_ph,
@@ -340,6 +342,10 @@ def learn(env,
             # obs = new_obs
 
             action = act(np.array(screen)[None], update_eps=update_eps, **kwargs)[0]
+            print(type(screen))
+            print("SCREEEN::::::::::::::")
+            print(np.array(screen)[None].shape)
+            print(screen)
             action_parsed, x, y = split_action(action)
             # print(action_parsed)
             reset = False
